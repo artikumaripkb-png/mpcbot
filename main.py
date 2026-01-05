@@ -17,7 +17,7 @@ def run_web_server():
     app.run(host='0.0.0.0', port=10000)
 
 # --- TELEGRAM BOT SETTINGS ---
-API_TOKEN = '8231937886:AAHQFPzsaEA7IIY0wOcvuRpYhsA0iQ6b9Ew'
+API_TOKEN = '8231937886:AAE5j686AsPae85fUtq1y7qpQFTb2BEBP94'
 bot = telebot.TeleBot(API_TOKEN)
 
 quiz_sessions = {} 
@@ -184,3 +184,4 @@ def handle_ans(ans):
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
     bot.infinity_polling()
+
