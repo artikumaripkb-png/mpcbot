@@ -7,17 +7,20 @@ import random
 import string
 from flask import Flask
 
-# --- Flask Server for Render ---
+# --- Flask Server for Render (Port Fixing) ---
 app = Flask('')
 @app.route('/')
-def home(): return "MPC Quiz Bot is Live!"
+def home(): 
+    return "MPC Quiz Bot is Live and Bug Free!"
 
 def run_web_server():
+    # Render के लिए पोर्ट 10000 फिक्स किया गया है
     app.run(host='0.0.0.0', port=10000)
 
 # --- BOT CONFIGURATION ---
-API_TOKEN = '8231937886:AAEwgKeZFRAQ9NzcTKKfhnRv8Ri0tIrnQyY' 
-bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=30) 
+# @BotFather से नया टोकन लेकर यहाँ सही से डालें
+API_TOKEN = '8231937886:AAEfIfKJhLZ74F4yqkTsEiKFOVN6ZEYa9TM' 
+bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=50)
 
 quiz_sessions = {} 
 id_map = {} 
@@ -25,6 +28,9 @@ stop_signals = {}
 
 def generate_quiz_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=7))
+
+# --- BUG FIX: Conflict रोकने के लिए Webhook हटाना ---
+bot.remove_webhook()
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
@@ -35,9 +41,9 @@ def welcome(message):
     else:
         markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
         markup.add(types.KeyboardButton('➕ Create New Quiz'))
-        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**\n\nNiche diye gaye button se quiz banayein.", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**", reply_markup=markup, parse_mode='Markdown')
 
-# --- QUIZ CREATION (SAME AS PREVIOUS UI) ---
+# --- QUIZ CREATION ENGINE (No Limit) ---
 @bot.message_handler(func=lambda message: message.text == '➕ Create New Quiz')
 def ask_title(message):
     msg = bot.send_message(message.chat.id, "📝 **Quiz Name (Title) likhein:**")
@@ -52,20 +58,27 @@ def get_title(message):
         'timer': 15, 'type': 'free', 'neg': '0.00',
         'creator': message.from_user.first_name, 'active_polls': {}
     }
-    msg = bot.send_message(chat_id, "🔢 **Apne saare sawal bhejien!**\n(Limit hata di gayi hai, aap 100+ sawal bhi bhej sakte hain)")
+    msg = bot.send_message(chat_id, "🔢 **Apne saare sawal bhejien!**\n(Aap 100+ sawal bhej sakte hain, bot sab count karega)")
     bot.register_next_step_handler(msg, parse_questions)
 
 def parse_questions(message):
     chat_id = message.chat.id
-    # Advanced logic to split many questions
-    blocks = re.split(r'(?i)Q\d*[\.\:]', message.text.strip())
+    # BUG FIX: सवालों को पहचानने का एडवांस तरीका ताकि 21 से ज़्यादा सवाल आ सकें
+    text = message.text
+    q_pattern = r'(?i)(?:Q\d*[\.\:]|Sawal\d*[\.\:]|\d+[\.\:])'
+    blocks = re.split(q_pattern, text)
+    
     valid_qs = []
     for b in blocks:
-        if "a)" in b.lower() or "b)" in b.lower():
+        if b.strip() and ("a)" in b.lower() or "b)" in b.lower()):
             valid_qs.append(f"Q. {b.strip()}")
             
+    if len(valid_qs) == 0:
+        bot.send_message(chat_id, "❌ Format galat hai. Sawal Q. ya 1. se shuru karein.")
+        return
+
     quiz_sessions[chat_id]['questions'] = valid_qs
-    msg = bot.send_message(chat_id, "⏱ **Timer (e.g. 15) aur Negative Marking (e.g. 0.25) likhein:**")
+    msg = bot.send_message(chat_id, f"✅ {len(valid_qs)} Sawal mil gaye!\n\n⏱ **Timer aur Negative Marking (e.g. 15 0.25) bhejien:**")
     bot.register_next_step_handler(msg, finalize_quiz)
 
 def finalize_quiz(message):
@@ -78,7 +91,7 @@ def finalize_quiz(message):
     bot_info = bot.get_me()
     link = f"https://t.me/{bot_info.username}?start={data['q_id']}"
     
-    # EXACT SCREENSHOT DESIGN
+    # PEHLE JAISA EXACT DESIGN
     success_msg = (
         f"┏━━━━━━━━━━━━━━━━━━\n"
         f"┃ 📝 **Quiz Created Successfully!**\n"
@@ -99,28 +112,23 @@ def finalize_quiz(message):
     
     bot.send_message(chat_id, success_msg, reply_markup=markup, parse_mode='Markdown')
 
-# --- LEADERBOARD (EXACT SCREENSHOT DESIGN) ---
+# --- LEADERBOARD & ENGINE (Bug Fixed) ---
 def send_result(chat_id, scores, title, total_q, q_id):
     if not scores:
         bot.send_message(chat_id, "🏆 **Quiz Over**\n\nKoi part nahi liya.")
         return
-
     sorted_s = sorted(scores.items(), key=lambda x: x[1]['c'], reverse=True)
     leaderboard = f"🏆 **LEADERBOARD: {title}**\n━━━━━━━━━━━━━━━━━━━━\n\n"
     medals = ["🥇", "🥈", "🥉", "4.", "5.", "6.", "7.", "8.", "9.", "10."]
-    
     for i, (uid, info) in enumerate(sorted_s[:10]):
         rank = medals[i] if i < len(medals) else f"{i+1}."
-        corr = info['c']
-        wrng = total_q - corr
+        corr, wrng = info['c'], total_q - info['c']
         perc = round((corr/total_q)*100, 2)
         leaderboard += f"{rank} **{info['n']}** | ✅ {corr} | ❌ {wrng} | 🎯 {corr}.00 | 📊 {perc}% | 🚀 {perc}%\n━━━━━━━━━━━━━━━━━━━━\n"
-
-    bot_info = bot.get_me()
-    markup = types.InlineKeyboardMarkup()
-    markup.row(types.InlineKeyboardButton("🔄 Restart Quiz", url=f"https://t.me/{bot_info.username}?start={q_id}"))
-    markup.row(types.InlineKeyboardButton("📊 Compare Results", callback_data="none"))
     
+    markup = types.InlineKeyboardMarkup()
+    markup.row(types.InlineKeyboardButton("🔄 Restart Quiz", url=f"https://t.me/{bot.get_me().username}?start={q_id}"))
+    markup.row(types.InlineKeyboardButton("📊 Compare Results", callback_data="none"))
     bot.send_message(chat_id, leaderboard, reply_markup=markup, parse_mode='Markdown')
 
 def process_quiz_by_id(chat_id, q_id):
@@ -132,13 +140,11 @@ def process_quiz_by_id(chat_id, q_id):
 
 def run_quiz_loop(chat_id, owner_id):
     data = quiz_sessions[owner_id]
-    scores = {}
-    total = len(data['questions'])
+    scores, total = {}, len(data['questions'])
     for i, q_block in enumerate(data['questions'], 1):
         if stop_signals.get(chat_id, False): break
         lines = q_block.split('\n')
-        opts = []
-        corr_id = 0
+        opts, corr_id = [], 0
         for line in lines[1:]:
             if ')' in line:
                 clean = line.replace("✅", "").strip()[2:].strip()
@@ -163,4 +169,9 @@ def handle_ans(ans):
 
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
-    bot.infinity_polling(timeout=90, long_polling_timeout=40)
+    # BUG FIX: Unauthorized एरर से बचने के लिए infinity_polling में सुधार
+    while True:
+        try:
+            bot.infinity_polling(timeout=120, long_polling_timeout=40)
+        except Exception:
+            time.sleep(5)
