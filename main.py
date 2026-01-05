@@ -23,7 +23,7 @@ def run_web_server():
 
 # --- TELEGRAM BOT CODE ---
 # Apna sahi API TOKEN yahan dalein
-API_TOKEN = '8231937886:AAEr8XTJC5q97IaaVKqgcg5WALP7DAvM4MQ'
+API_TOKEN = '8231937886:AAHQFPzsaEA7IIY0wOcvuRpYhsA0iQ6b9Ew'
 bot = telebot.TeleBot(API_TOKEN)
 
 # Quiz settings store karne ke liye
@@ -166,3 +166,4 @@ if __name__ == "__main__":
     print("Bot is starting...")
     # Bot ko polling par lagayein
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
+
