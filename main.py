@@ -7,7 +7,7 @@ import random
 import string
 from flask import Flask
 
-# --- Flask Server ---
+# --- Flask Server for Render ---
 app = Flask('')
 @app.route('/')
 def home(): return "MPC Quiz Bot is Live!"
@@ -16,8 +16,8 @@ def run_web_server():
     app.run(host='0.0.0.0', port=10000)
 
 # --- BOT CONFIGURATION ---
-API_TOKEN = '8231937886:AAExPGzUOhKz-7zyAeJS1cOUzVMctN2M53Y' 
-bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=50)
+API_TOKEN = '8231937886:AAE2vAFQmsaxboou_FsbtZztyqShQI61z8Q' 
+bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=30) 
 
 quiz_sessions = {} 
 id_map = {} 
@@ -25,8 +25,6 @@ stop_signals = {}
 
 def generate_quiz_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=7))
-
-bot.remove_webhook()
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
@@ -37,8 +35,9 @@ def welcome(message):
     else:
         markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
         markup.add(types.KeyboardButton('➕ Create New Quiz'))
-        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**\n\nNiche diye gaye button se quiz banayein.", reply_markup=markup, parse_mode='Markdown')
 
+# --- QUIZ CREATION ---
 @bot.message_handler(func=lambda message: message.text == '➕ Create New Quiz')
 def ask_title(message):
     msg = bot.send_message(message.chat.id, "📝 **Quiz Name (Title) likhein:**")
@@ -53,35 +52,19 @@ def get_title(message):
         'timer': 15, 'type': 'free', 'neg': '0.00',
         'creator': message.from_user.first_name, 'active_polls': {}
     }
-    bot.send_message(chat_id, "🔢 **Apne 40+ sawal bhejien!**\n(Bot 'Ex:' wali lines ko explanation bana dega)")
-    bot.register_next_step_handler(message, parse_questions)
+    msg = bot.send_message(chat_id, "🔢 **Apne saare sawal bhejien!**\n(Limit hata di gayi hai, aap 100+ sawal bhi bhej sakte hain)")
+    bot.register_next_step_handler(msg, parse_questions)
 
-# --- FIX: YAHAN SAWAL GINNE WALA LOGIC THEEK KIYA GAYA HAI ---
 def parse_questions(message):
     chat_id = message.chat.id
-    # Block split logic: Har sawal ko options ke sath alag karega
-    raw_blocks = re.split(r'\n\s*\n', message.text.strip())
+    blocks = re.split(r'(?i)Q\d*[\.\:]', message.text.strip())
     valid_qs = []
-    
-    for block in raw_blocks:
-        if "a)" in block.lower() and "b)" in block.lower():
-            # Explanation dhundhna (Ex: line)
-            ex_match = re.search(r'(?i)Ex:(.*)', block)
-            explanation = ex_match.group(1).strip() if ex_match else None
-            # Sawal se Ex hatana taaki poll saaf dikhe
-            question_body = re.sub(r'(?i)Ex:.*', '', block).strip()
+    for b in blocks:
+        if "a)" in b.lower() or "b)" in b.lower():
+            valid_qs.append(f"Q. {b.strip()}")
             
-            valid_qs.append({
-                'body': question_body,
-                'explanation': explanation
-            })
-            
-    if not valid_qs:
-        bot.send_message(chat_id, "❌ Koi sawal nahi mila! Format check karein.")
-        return
-
     quiz_sessions[chat_id]['questions'] = valid_qs
-    msg = bot.send_message(chat_id, f"✅ {len(valid_qs)} Sawal mil gaye!\n\n⏱ **Timer aur Negative Marking (e.g. 15 0.25) bhejien:**")
+    msg = bot.send_message(chat_id, "⏱ **Timer (e.g. 15) aur Negative Marking (e.g. 0.25) likhein:**")
     bot.register_next_step_handler(msg, finalize_quiz)
 
 def finalize_quiz(message):
@@ -94,12 +77,16 @@ def finalize_quiz(message):
     bot_info = bot.get_me()
     link = f"https://t.me/{bot_info.username}?start={data['q_id']}"
     
-    # DESIGN: SUCCESS MESSAGE (Waisa hi purana)
     success_msg = (
-        f"┏━━━━━━━━━━━━━━━━━━\n┃ 📝 **Quiz Created Successfully!**\n┗━━━━━━━━━━━━━━━━━━\n\n"
-        f"💳 **Quiz Name:** {data['title']}\n🔢 **Questions:** {len(data['questions'])}\n"
-        f"⏰ **Timer:** {data['timer']} seconds\n🆔 **Quiz ID:** `{data['q_id']}`\n"
-        f"💰 **Type:** {data['type']}\n☠️ **-ve Marking:** {data['neg']}\n"
+        f"┏━━━━━━━━━━━━━━━━━━\n"
+        f"┃ 📝 **Quiz Created Successfully!**\n"
+        f"┗━━━━━━━━━━━━━━━━━━\n\n"
+        f"💳 **Quiz Name:** {data['title']}\n"
+        f"🔢 **Questions:** {len(data['questions'])}\n"
+        f"⏰ **Timer:** {data['timer']} seconds\n"
+        f"🆔 **Quiz ID:** `{data['q_id']}`\n"
+        f"💰 **Type:** {data['type']}\n"
+        f"☠️ **-ve Marking:** {data['neg']}\n"
         f"👷 **Creator:** 🔥 {data['creator']} 🔥"
     )
     
@@ -107,25 +94,29 @@ def finalize_quiz(message):
     markup.row(types.InlineKeyboardButton("🎯 Start Quiz Now", url=link))
     markup.row(types.InlineKeyboardButton("🚀 Start Quiz in Group", url=f"https://t.me/{bot_info.username}?startgroup={data['q_id']}"))
     markup.row(types.InlineKeyboardButton("🔗 Share Quiz", switch_inline_query=data['q_id']))
+    
     bot.send_message(chat_id, success_msg, reply_markup=markup, parse_mode='Markdown')
 
-# DESIGN: LEADERBOARD (Waisa hi purana)
 def send_result(chat_id, scores, title, total_q, q_id):
     if not scores:
-        bot.send_message(chat_id, "🏆 **Quiz Over**\n\nKoi participant nahi mila.")
+        bot.send_message(chat_id, "🏆 **Quiz Over**\n\nKoi part nahi liya.")
         return
+
     sorted_s = sorted(scores.items(), key=lambda x: x[1]['c'], reverse=True)
     leaderboard = f"🏆 **LEADERBOARD: {title}**\n━━━━━━━━━━━━━━━━━━━━\n\n"
     medals = ["🥇", "🥈", "🥉", "4.", "5.", "6.", "7.", "8.", "9.", "10."]
+    
     for i, (uid, info) in enumerate(sorted_s[:10]):
         rank = medals[i] if i < len(medals) else f"{i+1}."
-        corr, wrng = info['c'], total_q - info['c']
+        corr = info['c']
+        wrng = total_q - corr
         perc = round((corr/total_q)*100, 2)
         leaderboard += f"{rank} **{info['n']}** | ✅ {corr} | ❌ {wrng} | 🎯 {corr}.00 | 📊 {perc}% | 🚀 {perc}%\n━━━━━━━━━━━━━━━━━━━━\n"
-    
+
+    bot_info = bot.get_me()
     markup = types.InlineKeyboardMarkup()
-    markup.row(types.InlineKeyboardButton("🔄 Restart Quiz", url=f"https://t.me/{bot.get_me().username}?start={q_id}"))
-    markup.row(types.InlineKeyboardButton("📊 Compare Results", callback_data="none"))
+    markup.row(types.InlineKeyboardButton("🔄 Restart Quiz", url=f"https://t.me/{bot_info.username}?start={q_id}"))
+    
     bot.send_message(chat_id, leaderboard, reply_markup=markup, parse_mode='Markdown')
 
 def process_quiz_by_id(chat_id, q_id):
@@ -137,23 +128,20 @@ def process_quiz_by_id(chat_id, q_id):
 
 def run_quiz_loop(chat_id, owner_id):
     data = quiz_sessions[owner_id]
-    scores, total = {}, len(data['questions'])
-    for i, q_data in enumerate(data['questions'], 1):
+    scores = {}
+    total = len(data['questions'])
+    for i, q_block in enumerate(data['questions'], 1):
         if stop_signals.get(chat_id, False): break
-        lines = q_data['body'].split('\n')
-        opts, corr_id = [], 0
-        for line in lines:
+        lines = q_block.split('\n')
+        opts = []
+        corr_id = 0
+        for line in lines[1:]:
             if ')' in line:
                 clean = line.replace("✅", "").strip()[2:].strip()
                 if "✅" in line: corr_id = len(opts)
-                if clean: opts.append(clean)
+                opts.append(clean)
         try:
-            p = bot.send_poll(
-                chat_id, f"[{i}/{total}] {lines[0]}", opts, 
-                is_anonymous=False, type='quiz', correct_option_id=corr_id,
-                explanation=q_data['explanation'][:200] if q_data['explanation'] else None,
-                open_period=data['timer']
-            )
+            p = bot.send_poll(chat_id, f"[{i}/{total}] {lines[0]}", opts, is_anonymous=False, type='quiz', correct_option_id=corr_id, open_period=data['timer'])
             data['active_polls'][p.poll.id] = {'correct': corr_id, 'scores': scores}
             time.sleep(data['timer'] + 1)
         except: continue
@@ -171,6 +159,4 @@ def handle_ans(ans):
 
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
-    while True:
-        try: bot.infinity_polling(timeout=120)
-        except Exception: time.sleep(5)
+    bot.infinity_polling(timeout=90, long_polling_timeout=40)
