@@ -7,17 +7,19 @@ import random
 import string
 from flask import Flask
 
-# --- Flask Server for Render ---
+# --- Flask Server for Render (बोट को ऑनलाइन रखने के लिए) ---
 app = Flask('')
 @app.route('/')
-def home(): return "MPC Quiz Bot is Live!"
+def home(): 
+    return "MPC Bot is Live!"
 
 def run_web_server():
     app.run(host='0.0.0.0', port=10000)
 
 # --- BOT CONFIGURATION ---
+# अपना टेलीग्राम बॉट टोकन यहाँ डालें
 API_TOKEN = '8231937886:AAE2vAFQmsaxboou_FsbtZztyqShQI61z8Q' 
-bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=30) 
+bot = telebot.TeleBot(API_TOKEN)
 
 quiz_sessions = {} 
 id_map = {} 
@@ -30,17 +32,18 @@ def generate_quiz_id():
 def welcome(message):
     chat_id = message.chat.id
     arg = message.text.split()[1] if len(message.text.split()) > 1 else None
+    
     if arg:
         process_quiz_by_id(chat_id, arg)
     else:
         markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
         markup.add(types.KeyboardButton('➕ Create New Quiz'))
-        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**\n\nNiche diye gaye button se quiz banayein.", reply_markup=markup, parse_mode='Markdown')
+        bot.send_message(chat_id, "👋 **Welcome to MPC QUIZ BOT**\n\nनीचे दिए गए बटन से क्विज़ बनाएं।", reply_markup=markup, parse_mode='Markdown')
 
-# --- QUIZ CREATION ---
+# --- क्विज़ निर्माण प्रक्रिया ---
 @bot.message_handler(func=lambda message: message.text == '➕ Create New Quiz')
 def ask_title(message):
-    msg = bot.send_message(message.chat.id, "📝 **Quiz Name (Title) likhein:**")
+    msg = bot.send_message(message.chat.id, "📝 **क्विज़ का नाम (Title) लिखें:**")
     bot.register_next_step_handler(msg, get_title)
 
 def get_title(message):
@@ -52,19 +55,14 @@ def get_title(message):
         'timer': 15, 'type': 'free', 'neg': '0.00',
         'creator': message.from_user.first_name, 'active_polls': {}
     }
-    msg = bot.send_message(chat_id, "🔢 **Apne saare sawal bhejien!**\n(Limit hata di gayi hai, aap 100+ sawal bhi bhej sakte hain)")
+    msg = bot.send_message(chat_id, "🔢 **सवाल भेजें!**\n\nप्रारूप (Format):\nQ. भारत की राजधानी क्या है?\na) मुंबई\nb) ✅ नई दिल्ली")
     bot.register_next_step_handler(msg, parse_questions)
 
 def parse_questions(message):
     chat_id = message.chat.id
-    blocks = re.split(r'(?i)Q\d*[\.\:]', message.text.strip())
-    valid_qs = []
-    for b in blocks:
-        if "a)" in b.lower() or "b)" in b.lower():
-            valid_qs.append(f"Q. {b.strip()}")
-            
-    quiz_sessions[chat_id]['questions'] = valid_qs
-    msg = bot.send_message(chat_id, "⏱ **Timer (e.g. 15) aur Negative Marking (e.g. 0.25) likhein:**")
+    blocks = re.split(r'\n\n+', message.text.strip())
+    quiz_sessions[chat_id]['questions'] = [b.strip() for b in blocks if "a)" in b.lower()]
+    msg = bot.send_message(chat_id, "⏱ **समय (जैसे 15) और नेगेटिव मार्किंग (जैसे 0.25) लिखें:**")
     bot.register_next_step_handler(msg, finalize_quiz)
 
 def finalize_quiz(message):
@@ -85,8 +83,6 @@ def finalize_quiz(message):
         f"🔢 **Questions:** {len(data['questions'])}\n"
         f"⏰ **Timer:** {data['timer']} seconds\n"
         f"🆔 **Quiz ID:** `{data['q_id']}`\n"
-        f"💰 **Type:** {data['type']}\n"
-        f"☠️ **-ve Marking:** {data['neg']}\n"
         f"👷 **Creator:** 🔥 {data['creator']} 🔥"
     )
     
@@ -97,9 +93,10 @@ def finalize_quiz(message):
     
     bot.send_message(chat_id, success_msg, reply_markup=markup, parse_mode='Markdown')
 
+# --- रिजल्ट और लीडरबोर्ड ---
 def send_result(chat_id, scores, title, total_q, q_id):
     if not scores:
-        bot.send_message(chat_id, "🏆 **Quiz Over**\n\nKoi part nahi liya.")
+        bot.send_message(chat_id, f"🏆 **रिजल्ट: {title}**\n\nकोई प्रतिभागी नहीं मिला।")
         return
 
     sorted_s = sorted(scores.items(), key=lambda x: x[1]['c'], reverse=True)
@@ -111,7 +108,7 @@ def send_result(chat_id, scores, title, total_q, q_id):
         corr = info['c']
         wrng = total_q - corr
         perc = round((corr/total_q)*100, 2)
-        leaderboard += f"{rank} **{info['n']}** | ✅ {corr} | ❌ {wrng} | 🎯 {corr}.00 | 📊 {perc}% | 🚀 {perc}%\n━━━━━━━━━━━━━━━━━━━━\n"
+        leaderboard += f"{rank} **{info['n']}** | ✅ {corr} | ❌ {wrng} | 📊 {perc}%\n━━━━━━━━━━━━━━━━━━━━\n"
 
     bot_info = bot.get_me()
     markup = types.InlineKeyboardMarkup()
@@ -119,12 +116,15 @@ def send_result(chat_id, scores, title, total_q, q_id):
     
     bot.send_message(chat_id, leaderboard, reply_markup=markup, parse_mode='Markdown')
 
+# --- क्विज़ इंजन ---
 def process_quiz_by_id(chat_id, q_id):
     if q_id in id_map:
         stop_signals[chat_id] = False
         owner_id = id_map[q_id]
-        bot.send_message(chat_id, f"🚀 **{quiz_sessions[owner_id]['title']}** shuru ho rahi hai...")
+        bot.send_message(chat_id, f"🚀 **{quiz_sessions[owner_id]['title']}** शुरू हो रही है...")
         threading.Thread(target=run_quiz_loop, args=(chat_id, owner_id)).start()
+    else: 
+        bot.send_message(chat_id, "❌ गलत क्विज़ ID।")
 
 def run_quiz_loop(chat_id, owner_id):
     data = quiz_sessions[owner_id]
@@ -144,7 +144,8 @@ def run_quiz_loop(chat_id, owner_id):
             p = bot.send_poll(chat_id, f"[{i}/{total}] {lines[0]}", opts, is_anonymous=False, type='quiz', correct_option_id=corr_id, open_period=data['timer'])
             data['active_polls'][p.poll.id] = {'correct': corr_id, 'scores': scores}
             time.sleep(data['timer'] + 1)
-        except: continue
+        except: 
+            continue
     send_result(chat_id, scores, data['title'], total, data['q_id'])
 
 @bot.poll_answer_handler()
@@ -154,9 +155,12 @@ def handle_ans(ans):
         if ans.poll_id in active:
             poll_info = active[ans.poll_id]
             uid = ans.user.id
-            if uid not in poll_info['scores']: poll_info['scores'][uid] = {'n': ans.user.first_name, 'c': 0}
-            if ans.option_ids[0] == poll_info['correct']: poll_info['scores'][uid]['c'] += 1
+            if uid not in poll_info['scores']: 
+                poll_info['scores'][uid] = {'n': ans.user.first_name, 'c': 0}
+            if ans.option_ids[0] == poll_info['correct']: 
+                poll_info['scores'][uid]['c'] += 1
 
 if __name__ == "__main__":
+    # वेब सर्वर को अलग थ्रेड में चलाना ताकि रेंडर/रैपलिट पर बॉट बंद न हो
     threading.Thread(target=run_web_server, daemon=True).start()
-    bot.infinity_polling(timeout=90, long_polling_timeout=40)
+    bot.infinity_polling()
