@@ -5,9 +5,9 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, Comma
 
 # --- अपनी डिटेल्स यहाँ भरें ---
 # 1. BotFather से प्राप्त टोकन यहाँ डालें
-TELEGRAM_TOKEN = '8231937886:AAHSvwlJ6wQGnFOVxbEB0ij_8wcf2B0T0rI'
+TELEGRAM_TOKEN = '8231937886:AAFfgIM3bM3Kp9HkbdGmElqcI-LCwLdPDzU'
 # अपनी नई API Key यहाँ पेस्ट करें जो ...Rs8k पर खत्म होती है
-GEMINI_API_KEY = 'AIzaSyBn5j15Fb63z0AMWWLQ1g1AGzR6itFoiIs'
+GEMINI_API_KEY = 'AIzaSyC62pR-oJY3S9Dv7IMIfisH9qHzYzvbCxA'
 
 # Gemini सेटअप
 genai.configure(api_key=GEMINI_API_KEY)
@@ -61,3 +61,4 @@ if __name__ == '__main__':
     
     print("बोट सफलतापुर्वक चालू हो गया है!")
     application.run_polling()
+
