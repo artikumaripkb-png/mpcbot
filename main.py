@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, Comma
 
 # --- अपनी डिटेल्स यहाँ भरें ---
 # --- अपनी डिटेल्स यहाँ भरें ---
-TELEGRAM_TOKEN = 'AIzaSyCzj77hLN0A0Ht-E3tEEGppTyfa24q2XTg'
+TELEGRAM_TOKEN = '8231937886:AAHL3LAA9m7FdazqQKnU8msu4PZw-aK4B80'
 # अपनी सही API Key यहाँ पेस्ट करें
 GEMINI_API_KEY = 'AIzaSyBqdHBP32jpNNyFvI3lphNLD42KHJKDwpM'
 
